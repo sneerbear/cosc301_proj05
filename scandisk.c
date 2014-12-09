@@ -13,7 +13,6 @@
 #include "direntry.h"
 #include "fat.h"
 #include "dos.h"
-#include "list.h"
 
 
 void print_indent(int indent) {
@@ -103,9 +102,21 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
            hidden?'h':' ', 
            sys?'s':' ', 
            arch?'a':' ');
+		
     }
 
     return followclust;
+}
+
+int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb){
+	uint16_t cluster = getushort(dirent->deStartCluster);
+	int size = 0;
+	while (!is_end_of_file(cluster)){
+		size += 512;
+		cluster = get_fat_entry(cluster, image_buf, bpb);
+		//printf("Cluster: %u\n",cluster);
+	}
+	return size;
 }
 
 
@@ -113,11 +124,18 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
     
 	while (is_valid_cluster(cluster, bpb)) {
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-
         int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
         int i = 0;
 		for ( ; i < numDirEntries; i++){
             uint16_t followclust = print_dirent(dirent, indent);
+			if(getushort(dirent->deStartCluster) != 0){
+				int size = trace(dirent, image_buf, bpb);
+				int difference = size - (int)getulong(dirent->deFileSize);
+				printf("Difference: %d\n",difference);
+				//uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
+				//printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
+				//printf("Head: %u\n",head_cluster);
+			}
             if (followclust)
                 follow_dir(followclust, indent+1, image_buf, bpb);
             dirent++;
@@ -156,8 +174,6 @@ int main(int argc, char** argv) {
 		}
 		dirent++;
 	}
-
-
 	
     unmmap_file(image_buf, &fd);
     return 0;
