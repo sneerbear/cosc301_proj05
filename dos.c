@@ -97,7 +97,7 @@ struct bpb33* check_bootsector(uint8_t *image_buf)
     struct bpb33* bpb_aligned;
 
 #ifdef DEBUG
-    fprintf(stderr, "Size of BPB: %lu\n", sizeof(struct bootsector33));
+    fprintf(stderr, "Size of BPB: %u\n", sizeof(struct bootsector33));
 #endif
 
     bootsect = (struct bootsector33*)image_buf;

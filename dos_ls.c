@@ -12,7 +12,6 @@
 #include "bpb.h"
 #include "direntry.h"
 #include "fat.h"
-#include "dos.h"
 
 
 void print_indent(int indent)
@@ -174,7 +173,7 @@ int main(int argc, char** argv)
     struct bpb33* bpb;
     if (argc != 2)
     {
-	usage(argv[0]);
+		usage(argv[0]);
     }
 
     image_buf = mmap_file(argv[1], &fd);
