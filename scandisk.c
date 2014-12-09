@@ -13,6 +13,7 @@
 #include "direntry.h"
 #include "fat.h"
 #include "dos.h"
+#include "list.h"
 
 
 void print_indent(int indent) {
@@ -155,6 +156,8 @@ int main(int argc, char** argv) {
 		}
 		dirent++;
 	}
+
+
 	
     unmmap_file(image_buf, &fd);
     return 0;
