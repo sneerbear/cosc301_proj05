@@ -134,10 +134,10 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 				int difference = size - (int)getulong(dirent->deFileSize);
                 if(difference > 512 || difference < 0) {
                     
-                    char tempn[9];
-                    char tempext[4];
-					char name[9] = {'\0'};
-					char ext[4] = {'\0'};
+                    char tempn[10];
+                    char tempext[5];
+					char name[10] = {'\0'};
+					char ext[5] = {'\0'};
 
                     tempn[8] = ' ';
                     tempext[3] = ' ';
@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
     
     uint8_t BFA[CLUST_LAST & FAT12_MASK] = {0};
 
-    image_buf = mmap_file("badimage1.img", &fd);
+    image_buf = mmap_file("goodimage.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
