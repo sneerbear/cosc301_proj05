@@ -340,6 +340,8 @@ int main(int argc, char** argv) {
    // handleorphans(BFA,image_buf,bpb);
 	
     unmmap_file(image_buf, &fd);
+    free(BFA);
+    
 
     // printf("%u\n", sizeof(int)*(bpb->bpbFATsecs));
    // printf("BIG FUCKING ARRAY SIZE %u\n", CLUST_LAST & FAT12_MASK);
