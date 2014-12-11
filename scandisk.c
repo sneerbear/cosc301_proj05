@@ -134,15 +134,36 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 				int difference = size - (int)getulong(dirent->deFileSize);
                 if(difference > 512 || difference < 0) {
                     
-                    char name[9];
-                    char extension[4];
+                    char tempn[9];
+                    char tempext[4];
+					char name[9] = {'\0'};
+					char ext[4] = {'\0'};
 
-                    name[8] = ' ';
-                    extension[3] = ' ';
-                    memcpy(name, &(dirent->deName[0]), 8);
-                    memcpy(extension, dirent->deExtension, 3);
+                    tempn[8] = ' ';
+                    tempext[3] = ' ';
+                    memcpy(tempn, &(dirent->deName[0]), 8);
+                    memcpy(tempext, dirent->deExtension, 3);
+					
+				    /* names are space padded - remove the spaces */
+				    for (int i = 8; i > 0; i--)  {
+						if (tempn[i] == ' ') 
+					    	tempn[i] = '\0';
+						else 
+					    	break;
+				    }
 
-                    printf("Filename: %s.%s\n", name,extension);
+				    /* remove the spaces from extensions */
+				    for (int i = 3; i > 0; i--) {
+						if (tempext[i] == ' ') 
+					    	tempext[i] = '\0';
+						else 
+					    	break;
+				    }
+					
+					strcat(name,tempn);
+					strcat(ext,tempext);
+
+                    printf("Filename: %s.%s\n", name,ext);
     				printf("Difference: %d\n",difference);
     				uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
     				printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
