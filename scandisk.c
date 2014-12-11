@@ -71,14 +71,14 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 	// printf("Win95 long-filename entry seq 0x%0x\n", dirent->deName[0]);
     }
     else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
-		printf("Volume: %s\n", name);
+		//printf("Volume: %s\n", name);
     } 
     else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
         // don't deal with hidden directories; MacOS makes these
         // for trash directories and such; just ignore them.
 		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {
-	    	print_indent(indent);
-    	    printf("%s/ (directory)\n", name);
+	    	//print_indent(indent);
+    	   // printf("%s/ (directory)\n", name);
             file_cluster = getushort(dirent->deStartCluster);
             followclust = file_cluster;
         }
@@ -95,32 +95,33 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 		int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
 
 		size = getulong(dirent->deFileSize);
-		print_indent(indent);
-		printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
+		//print_indent(indent);
+		/*printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
 	       name, extension, size, getushort(dirent->deStartCluster),
 	       ro?'r':' ', 
            hidden?'h':' ', 
            sys?'s':' ', 
-           arch?'a':' ');
+           arch?'a':' '); */
 		
     }
 
     return followclust;
 }
 
-int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb){
+int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t BFA[]){
 	uint16_t cluster = getushort(dirent->deStartCluster);
 	int size = 0;
 	while (!is_end_of_file(cluster)){
 		size += 512;
 		cluster = get_fat_entry(cluster, image_buf, bpb);
+        BFA[(int)cluster] = 1; //Mark cluster as visited
 		//printf("Cluster: %u\n",cluster);
 	}
 	return size;
 }
 
 
-void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb) {
+void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t BFA[]) {
     
 	while (is_valid_cluster(cluster, bpb)) {
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
@@ -129,15 +130,27 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 		for ( ; i < numDirEntries; i++){
             uint16_t followclust = print_dirent(dirent, indent);
 			if(getushort(dirent->deStartCluster) != 0){
-				int size = trace(dirent, image_buf, bpb);
+				int size = trace(dirent, image_buf, bpb, BFA);
 				int difference = size - (int)getulong(dirent->deFileSize);
-				printf("Difference: %d\n",difference);
-				//uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
-				//printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
-				//printf("Head: %u\n",head_cluster);
+                if(difference > 512 || difference < 0) {
+                    
+                    char name[9];
+                    char extension[4];
+
+                    name[8] = ' ';
+                    extension[3] = ' ';
+                    memcpy(name, &(dirent->deName[0]), 8);
+                    memcpy(extension, dirent->deExtension, 3);
+
+                    printf("Filename: %s.%s\n", name,extension);
+    				printf("Difference: %d\n",difference);
+    				uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
+    				printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
+    				printf("Head: %u\n",head_cluster);
+                }
 			}
             if (followclust)
-                follow_dir(followclust, indent+1, image_buf, bpb);
+                follow_dir(followclust, indent+1, image_buf, bpb, BFA);
             dirent++;
 		}
 
@@ -151,6 +164,14 @@ void usage(char *progname) {
     exit(1);
 }
 
+void freeclusters(uint8_t BFA[], uint8_t *image_buf, struct bpb33 *bpb) {
+    for(uint16_t i=CLUST_FIRST; !is_end_of_file(i); i++) {
+        if(BFA[i]==0) {
+            set_fat_entry(i,CLUST_FREE,image_buf,bpb);
+        }
+    }
+}
+
 
 int main(int argc, char** argv) {
     uint8_t *image_buf;
@@ -159,6 +180,8 @@ int main(int argc, char** argv) {
     //if (argc < 2) {
 		//usage(argv[0]);
     //}
+    
+    uint8_t BFA[CLUST_LAST & FAT12_MASK] = {0};
 
     image_buf = mmap_file("badimage1.img", &fd);
     bpb = check_bootsector(image_buf);
@@ -169,13 +192,18 @@ int main(int argc, char** argv) {
 	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
 		int16_t followclust = print_dirent(dirent, 0);
 		if (is_valid_cluster(followclust, bpb)){
-			follow_dir(followclust, 1, image_buf, bpb);
-			printf("VALID\n");
+			follow_dir(followclust, 1, image_buf, bpb, BFA);
+			//printf("VALID\n");
 		}
 		dirent++;
 	}
+
+    freeclusters(BFA,image_buf,bpb);
 	
     unmmap_file(image_buf, &fd);
+
+    // printf("%u\n", sizeof(int)*(bpb->bpbFATsecs));
+   // printf("BIG FUCKING ARRAY SIZE %u\n", CLUST_LAST & FAT12_MASK);
     return 0;
 }
 
