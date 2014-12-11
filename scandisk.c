@@ -48,64 +48,50 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 	// skip it
         return followclust;
     }
-
-    /* names are space padded - remove the spaces */
-    for (i = 8; i > 0; i--)  {
-		if (name[i] == ' ') 
-	    	name[i] = '\0';
-		else 
-	    	break;
-    }
-
-    /* remove the spaces from extensions */
-    for (i = 3; i > 0; i--) {
-		if (extension[i] == ' ') 
-	    	extension[i] = '\0';
-		else 
-	    	break;
-    }
-
-    if ((dirent->deAttributes & ATTR_WIN95LFN) == ATTR_WIN95LFN) {
-	// ignore any long file name extension entries
-	//
-	// printf("Win95 long-filename entry seq 0x%0x\n", dirent->deName[0]);
-    }
-    else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
-		//printf("Volume: %s\n", name);
-    } 
     else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
-        // don't deal with hidden directories; MacOS makes these
-        // for trash directories and such; just ignore them.
 		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {
-	    	//print_indent(indent);
-    	   // printf("%s/ (directory)\n", name);
             file_cluster = getushort(dirent->deStartCluster);
             followclust = file_cluster;
         }
     }
-    else 
-    {
-        /*
-         * a "regular" file entry
-         * print attributes, size, starting cluster, etc.
-         */
-		int ro = (dirent->deAttributes & ATTR_READONLY) == ATTR_READONLY;
-		int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
-		int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
-		int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
+    return followclust;
+}
 
-		size = getulong(dirent->deFileSize);
-		//print_indent(indent);
-		/*printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
-	       name, extension, size, getushort(dirent->deStartCluster),
-	       ro?'r':' ', 
-           hidden?'h':' ', 
-           sys?'s':' ', 
-           arch?'a':' '); */
-		
+void printfile(struct direntry *dirent) {
+    char tempn[10];
+    char tempext[5];
+    char name[10] = {'\0'};
+    char ext[5] = {'\0'};
+
+    tempn[8] = ' ';
+    tempext[3] = ' ';
+    memcpy(tempn, &(dirent->deName[0]), 8);
+    memcpy(tempext, dirent->deExtension, 3);
+    
+    /* names are space padded - remove the spaces */
+    for (int i = 8; i > 0; i--)  {
+        if (tempn[i] == ' ') 
+            tempn[i] = '\0';
+        else 
+            break;
     }
 
-    return followclust;
+    /* remove the spaces from extensions */
+    for (int i = 3; i > 0; i--) {
+        if (tempext[i] == ' ') 
+            tempext[i] = '\0';
+        else 
+            break;
+    }
+    
+    strcat(name,tempn);
+    strcat(ext,tempext);
+
+    printf("Filename: %s.%s\n", name,ext);
+    printf("Difference: %d\n",difference);
+    uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
+    printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
+    printf("Head: %u\n",head_cluster);
 }
 
 int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
@@ -116,7 +102,6 @@ int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_
         if(cluster == CLUST_BAD & FAT12_MASK) {
             if(oldCluster != NULL) {
                 set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
-                BFA[cluster] = 3;
             }
             break;
         }
@@ -131,11 +116,8 @@ int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_
             BFA[cluster] = 2;
             break;
         }
-		//printf("Cluster: %u\n",cluster);
 	}
-
-    int difference = size - (int)getulong(dirent->deFileSize);
-	return difference;
+    return = size - (int)getulong(dirent->deFileSize);
 }
 
 void difftoolarge(uint8_t start_cluster,uint8_t *image_buf, struct bpb33 *bpb, uint8_t *BFA) {
@@ -163,51 +145,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 		for ( ; i < numDirEntries; i++){
             uint16_t followclust = print_dirent(dirent, indent);
 			if(getushort(dirent->deStartCluster) != 0){
-				int difference = trace(dirent, image_buf, bpb, BFA);
-                
-                //Cluster in FAT needs to be freed
-                if(difference > 512) {
-                    
-                   /* char tempn[10];
-                    char tempext[5];
-					char name[10] = {'\0'};
-					char ext[5] = {'\0'};
-
-                    tempn[8] = ' ';
-                    tempext[3] = ' ';
-                    memcpy(tempn, &(dirent->deName[0]), 8);
-                    memcpy(tempext, dirent->deExtension, 3);
-					
-				    /* names are space padded - remove the spaces */
-				    /*for (int i = 8; i > 0; i--)  {
-						if (tempn[i] == ' ') 
-					    	tempn[i] = '\0';
-						else 
-					    	break;
-				    }
-
-				    /* remove the spaces from extensions */
-				    /*for (int i = 3; i > 0; i--) {
-						if (tempext[i] == ' ') 
-					    	tempext[i] = '\0';
-						else 
-					    	break;
-				    }
-					
-					strcat(name,tempn);
-					strcat(ext,tempext);
-
-                    printf("Filename: %s.%s\n", name,ext);
-    				printf("Difference: %d\n",difference);
-    				uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
-    				printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
-    				printf("Head: %u\n",head_cluster); */
-
-
-                }
-
-                //file is larger than FAT table allows it to be
-                
+				trace(dirent, image_buf, bpb, BFA);                
 			}
             if (followclust)
                 follow_dir(followclust, indent+1, image_buf, bpb, BFA);
@@ -224,14 +162,11 @@ void usage(char *progname) {
     exit(1);
 }
 
-void freeclusters(uint8_t BFA[], uint8_t *image_buf, struct bpb33 *bpb) {
+void freeclusters(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     for(uint16_t i=CLUST_FIRST; !is_end_of_file(i); i++) {
-        if(BFA[i]==0) {
-            set_fat_entry(i,CLUST_FREE,image_buf,bpb);
-        } else if (BFA[i]==2) {
-
-        } else if (BFA[i]==3) {
-
+            //set_fat_entry(i,CLUST_FREE,image_buf,bpb);
+        if (BFA[i]==2) { 
+            difftoolarge(i,image_buf,bpb,BFA);
         }
     }
 }
