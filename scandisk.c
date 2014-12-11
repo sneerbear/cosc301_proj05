@@ -94,7 +94,7 @@ void printfile(struct direntry *dirent) {
     printf("Head: %u\n",head_cluster);
 }
 
-int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
+void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
     uint16_t oldCluster = NULL;
 	int size = 0;
@@ -117,7 +117,11 @@ int trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_
             break;
         }
 	}
-    return = size - (int)getulong(dirent->deFileSize);
+    int difference = size - (int)getulong(dirent->deFileSize);
+
+    if(difference > 0) {
+
+    }
 }
 
 void difftoolarge(uint8_t start_cluster,uint8_t *image_buf, struct bpb33 *bpb, uint8_t *BFA) {
@@ -209,22 +213,3 @@ int main(int argc, char** argv) {
    // printf("BIG FUCKING ARRAY SIZE %u\n", CLUST_LAST & FAT12_MASK);
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
