@@ -284,20 +284,196 @@ void create_dirent(struct direntry *dirent, char *filename,
     }
 }
 
+void get_name(char *fullname, struct direntry *dirent) 
+{
+    char name[9];
+    char extension[4];
+    int i;
+
+    name[8] = ' ';
+    extension[3] = ' ';
+    memcpy(name, &(dirent->deName[0]), 8);
+    memcpy(extension, dirent->deExtension, 3);
+
+    /* names are space padded - remove the padding */
+    for (i = 8; i > 0; i--) 
+    {
+    if (name[i] == ' ') 
+        name[i] = '\0';
+    else 
+        break;
+    }
+
+    /* extensions aren't normally space padded - but remove the
+       padding anyway if it's there */
+    for (i = 3; i > 0; i--) 
+    {
+    if (extension[i] == ' ') 
+        extension[i] = '\0';
+    else 
+        break;
+    }
+    fullname[0]='\0';
+    strcat(fullname, name);
+
+    /* append the extension if it's not a directory */
+    if ((dirent->deAttributes & ATTR_DIRECTORY) == 0) 
+    {
+    strcat(fullname, ".");
+    strcat(fullname, extension);
+    }
+}
+
+
+#define FIND_FILE 0
+#define FIND_DIR 1
+
+struct direntry* find_file(char *infilename, uint16_t cluster,
+               int find_mode,
+               uint8_t *image_buf, struct bpb33* bpb)
+{
+    char buf[MAXPATHLEN];
+    char *seek_name, *next_name;
+    int d;
+    struct direntry *dirent;
+    uint16_t dir_cluster;
+    char fullname[13];
+
+    /* find the first dirent in this directory */
+    dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+
+    /* first we need to split the file name we're looking for into the
+       first part of the path, and the remainder.  We hunt through the
+       current directory for the first part.  If there's a remainder,
+       and what we find is a directory, then we recurse, and search
+       that directory for the remainder */
+
+    strncpy(buf, infilename, MAXPATHLEN);
+    seek_name = buf;
+
+    /* trim leading slashes */
+    while (*seek_name == '/' || *seek_name == '\\') 
+    {
+    seek_name++;
+    }
+
+    /* search for any more slashes - if so, it's a dirname */
+    next_name = seek_name;
+    while (1) 
+    {
+    if (*next_name == '/' || *next_name == '\\') 
+    {
+        *next_name = '\0';
+        next_name ++;
+        break;
+    }
+    if (*next_name == '\0') 
+    {
+        /* end of name - no slashes found */
+        next_name = NULL;
+        if (find_mode == FIND_DIR) 
+        {
+        return dirent;
+        }
+        break;
+    }
+    next_name++;
+    }
+
+    while (1) 
+    {
+    /* hunt a cluster for the relevant dirent.  If we reach the
+       end of the cluster, we'll need to go to the next cluster
+       for this directory */
+    for (d = 0; 
+         d < bpb->bpbBytesPerSec * bpb->bpbSecPerClust; 
+         d += sizeof(struct direntry)) 
+    {
+        if (dirent->deName[0] == SLOT_EMPTY) 
+        {
+        /* we failed to find the file */
+        return NULL;
+        }
+
+        if (dirent->deName[0] == SLOT_DELETED) 
+        {
+        /* skip over a deleted file */
+        dirent++;
+        continue;
+        }
+
+        get_name(fullname, dirent);
+        if (strcmp(fullname, seek_name)==0) 
+        {
+        /* found it! */
+        if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) 
+        {
+            /* it's a directory */
+            if (next_name == NULL) 
+            {
+            fprintf(stderr, "Cannot copy out a directory\n");
+            exit(1);
+            }
+            dir_cluster = getushort(dirent->deStartCluster);
+            return find_file(next_name, dir_cluster, 
+                     find_mode, image_buf, bpb);
+        } 
+        else if ((dirent->deAttributes & ATTR_VOLUME) != 0) 
+        {
+            /* it's a volume */
+            fprintf(stderr, "Cannot copy out a volume\n");
+            exit(1);
+        } 
+        else 
+        {
+            /* assume it's a file */
+            return dirent;
+        }
+        }
+        dirent++;
+    }
+
+    /* we've reached the end of the cluster for this directory.
+       Where's the next cluster? */
+    if (cluster == 0) 
+    {
+        // root dir is special
+        dirent++;
+    } 
+    else 
+    {
+        cluster = get_fat_entry(cluster, image_buf, bpb);
+        dirent = (struct direntry*)cluster_to_addr(cluster, 
+                               image_buf, bpb);
+    }
+    }
+}
+
+
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     int numOrphans = 0;
-    for(uint16_t i=CLUST_FIRST; !is_end_of_file(i); i++) {
+    for(uint16_t i=CLUST_FIRST; i < sizeof(BFA)/sizeof(uint16_t); i++) {
         if(BFA[i]==0) {
             if(get_fat_entry(i,image_buf,bpb) != (CLUST_FREE & FAT12_MASK)) {
-                struct direntry *dir = (void *)1;
+                struct direntry *dirent = (void *)1;
                 char *num = malloc(sizeof(char)*4);
                 snprintf(num, sizeof(num), "%d", numOrphans);
                 char *filename = malloc(5+4+sizeof(num));
-                strcpy(filename,"foundm");
+                strcpy(filename,"found");
                 strcat(filename,num);
                 strcat(filename,".dat");
 
-                create_dirent(dir, filename, i, 512,image_buf, bpb);
+
+                dirent = find_file(filename, 0, 1, image_buf, bpb);
+                if (dirent == NULL) 
+                {
+                    fprintf(stderr, "Directory does not exists in the disk image\n");
+                    exit(1);
+                }
+
+                write_dirent(dirent,filename,i,512);
+
+                create_dirent(dirent, filename, i, 512,image_buf, bpb);
                 numOrphans++;
             }
         }
@@ -337,11 +513,11 @@ int main(int argc, char** argv) {
 		dirent++;
 	}
 
-   // handleorphans(BFA,image_buf,bpb);
+    handleorphans(BFA,image_buf,bpb);
 	
     unmmap_file(image_buf, &fd);
     free(BFA);
-    
+
 
     // printf("%u\n", sizeof(int)*(bpb->bpbFATsecs));
    // printf("BIG FUCKING ARRAY SIZE %u\n", CLUST_LAST & FAT12_MASK);
