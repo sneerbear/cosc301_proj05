@@ -94,6 +94,7 @@ uint16_t getfollowclust(struct direntry *dirent, int indent) {
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
     uint16_t oldCluster = 0;
+    printf("clust: %u\n", cluster);
 	int size = 0; //There is no cluster 0?
 	while (!is_end_of_file(cluster)){
         if(cluster == (CLUST_BAD & FAT12_MASK)) {
@@ -103,10 +104,10 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
             break;
         }
         size += 512; 
-
+        //printf("%u\n", cluster);
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
-		printf("here\n");
+		//printf("here\n");
 	}
            
     int difference = size - (int)getulong(dirent->deFileSize);
@@ -380,7 +381,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("goodimage.img", &fd);
+    image_buf = mmap_file("badimage1.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
