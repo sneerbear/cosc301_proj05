@@ -101,18 +101,22 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		if(size != -1){
         	size += 512; 
 		}
-		else if(size-512 > filesize){
+		else if(size > filesize){
 			set_fat_entry(oldCluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
 		}
 		
-		if(size > filesize){
+		if(size - 512 > filesize){
 			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
 			size = -1;
 		}
 
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
-		
+        if(BFA[oldCluster]> 0) {
+            printf("%s\n", "Multiple impressions on one cluster");
+        } else {
+		  BFA[oldCluster]++;
+        }
 	}
 	if(size == -1){
 		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
