@@ -15,6 +15,39 @@
 #include "fat.h"
 #include "dos.h"
 
+uint16_t getfollowclust(struct direntry *dirent, int indent) {     
+    uint16_t followclust = 0;      
+       
+    char name[9];      
+    char extension[4];     
+    //uint32_t size;       
+    uint16_t file_cluster;     
+    name[8] = ' ';     
+    extension[3] = ' ';        
+    memcpy(name, &(dirent->deName[0]), 8);     
+    memcpy(extension, dirent->deExtension, 3);     
+    if (name[0] == SLOT_EMPTY) {       
+       return followclust;     
+    }      
+       
+    /* skip over deleted entries */        
+    if (((uint8_t)name[0]) == SLOT_DELETED) {      
+   return followclust;     
+    }      
+       
+    if (((uint8_t)name[0]) == 0x2E) {      
+   // dot entry ("." or "..")      
+   // skip it      
+        return followclust;        
+    }      
+    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {       
+       if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {      
+            file_cluster = getushort(dirent->deStartCluster);      
+            followclust = file_cluster;        
+        }      
+    }      
+    return followclust;        
+}     
 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA) {
     
@@ -25,7 +58,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 		for ( ; i < numDirEntries; i++){
             uint16_t followclust = getfollowclust(dirent, indent);
 			if(getushort(dirent->deStartCluster) != 0){
-				trace(dirent, image_buf, bpb, BFA);                
+				//trace(dirent, image_buf, bpb, BFA);                
 			}
             if (followclust)
                 follow_dir(followclust, indent+1, image_buf, bpb, BFA);
@@ -351,19 +384,18 @@ int main(int argc, char** argv) {
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
-    // This is probably shit
-	// uint16_t cluster = 0;
-	// struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-	// for(int i = 0; i < bpb->bpbRootDirEnts; i++){
-	// 	int16_t followclust = getfollowclust(dirent, 0);
-	// 	if (is_valid_cluster(followclust, bpb)){
-	// 		follow_dir(followclust, 1, image_buf, bpb, BFA);
-	// 		//printf("VALID\n");
-	// 	}
-	// 	dirent++;
-	// }
+    //This is probably shit
+	uint16_t cluster = 0;
+	struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
+		int16_t followclust = getfollowclust(dirent, 0);
+		if (is_valid_cluster(followclust, bpb)){
+			follow_dir(followclust, 1, image_buf, bpb, BFA);
+		}
+		dirent++;
+	}
     //moderate shit
-   // handleorphans(BFA,image_buf,bpb);
+    //handleorphans(BFA,image_buf,bpb);
 	
 
     //Not shit
