@@ -15,157 +15,6 @@
 #include "fat.h"
 #include "dos.h"
 
-void plsincrement(uint16_t clust,uint8_t *BFA) {
-    if(BFA[clust] == 1) { 
-        printf("Problem, cluster %u has been touched twice.\n", clust); 
-    } else { 
-        BFA[clust]++; 
-    }
-} 
-
-void print_indent(int indent) {
-    int i;
-    for (i = 0; i < indent*4; i++)
-	printf(" ");
-}
-
-
-uint16_t getfollowclust(struct direntry *dirent, int indent) {
-    uint16_t followclust = 0;
-
-    char name[9];
-    char extension[4];
-    //uint32_t size;
-    uint16_t file_cluster;
-    name[8] = ' ';
-    extension[3] = ' ';
-    memcpy(name, &(dirent->deName[0]), 8);
-    memcpy(extension, dirent->deExtension, 3);
-    if (name[0] == SLOT_EMPTY) {
-		return followclust;
-    }
-
-    /* skip over deleted entries */
-    if (((uint8_t)name[0]) == SLOT_DELETED) {
-	return followclust;
-    }
-
-    if (((uint8_t)name[0]) == 0x2E) {
-	// dot entry ("." or "..")
-	// skip it
-        return followclust;
-    }
-    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
-		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {
-            file_cluster = getushort(dirent->deStartCluster);
-            followclust = file_cluster;
-        }
-    }
-    return followclust;
-}
-
-void printfile(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb) {
-    char tempn[10];
-    char tempext[5];
-    char name[10] = {'\0'};
-    char ext[5] = {'\0'};
-
-    tempn[8] = ' ';
-    tempext[3] = ' ';
-    memcpy(tempn, &(dirent->deName[0]), 8);
-    memcpy(tempext, dirent->deExtension, 3);
-    
-    /* names are space padded - remove the spaces */
-    for (int i = 8; i > 0; i--)  {
-        if (tempn[i] == ' ') 
-            tempn[i] = '\0';
-        else 
-            break;
-    }
-
-    /* remove the spaces from extensions */
-    for (int i = 3; i > 0; i--) {
-        if (tempext[i] == ' ') 
-            tempext[i] = '\0';
-        else 
-            break;
-    }
-    
-    strcat(name,tempn);
-    strcat(ext,tempext);
-
-    printf("Filename: %s.%s\n", name,ext);
-    //printf("Difference: %d\n",difference);
-    uint16_t head_cluster = get_fat_entry(getushort(dirent->deStartCluster), image_buf, bpb);
-    printf("Start Cluster: %u\n", getushort(dirent->deStartCluster));
-    printf("Head: %u\n",head_cluster);
-}
-
-void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
-	uint16_t cluster = getushort(dirent->deStartCluster);
-    uint16_t oldCluster = 0;
-	int size = 0; //There is no cluster 0?
-	while (!is_end_of_file(cluster)){
-
-        if(cluster == (CLUST_BAD & FAT12_MASK)) {
-            if(oldCluster != 0) {
-                set_fat_entry(cluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
-            }
-            break;
-        }
-
-        size += 512; 
-        printf("1\n");
-        plsincrement(cluster,BFA); //Mark cluster as visited
-
-        oldCluster = cluster;
-        cluster = get_fat_entry(cluster, image_buf, bpb);
-
-        if(size > getushort(dirent->deFileSize)) {  
-            printf("%u > %u\n",size, getushort(dirent->deFileSize));
-            printfile(dirent,image_buf,bpb);
-            set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
-
-            while(1) {
-                printf("2\n");
-                plsincrement(cluster,BFA); 
-                oldCluster = cluster;
-                cluster = get_fat_entry(cluster, image_buf,bpb);  
-                set_fat_entry(oldCluster,CLUST_FREE & FAT12_MASK, image_buf,bpb);
-
-                if(is_end_of_file(cluster)) {
-                    set_fat_entry(cluster,CLUST_FREE & FAT12_MASK, image_buf,bpb);
-                    printf("3\n");
-                    plsincrement(cluster,BFA);
-                    break;
-                }              
-            }
-            //Fix things here! 
-            break;  // THIS IS REALLY STUPID CIRCULAR CODE STRUCTURE, 
-                    // SHOULD PROBABLY REASSESS LATER 
-        }
-	}
-    int difference = size - (int)getulong(dirent->deFileSize);
-
-    //Solution to case where file in directory is too large, reset to FAT table size
-    if(difference < 0) {
-        //Change size
-        printfile(dirent,image_buf,bpb);
-        printf("Difference: %d\n",difference);
-        //putushort(dirent->deFileSize, size); //look at this
-    } 
-}
-
-void difftoolarge(uint8_t start_cluster,uint8_t *image_buf, struct bpb33 *bpb, uint8_t *BFA) {
-    uint8_t cluster = start_cluster;
-    uint8_t oldCluster = cluster;
-    while(!is_end_of_file(start_cluster)) {
-        cluster = get_fat_entry(cluster,image_buf,bpb);
-        set_fat_entry(oldCluster,CLUST_FREE&FAT12_MASK,image_buf,bpb);
-        BFA[oldCluster] = 1;
-        oldCluster = cluster;
-    }
-}
 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA) {
     
@@ -452,7 +301,7 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
     }
 }
 
-
+//Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     int numOrphans = 0;
     for(uint16_t i=CLUST_FIRST; i < sizeof(BFA)/sizeof(uint16_t); i++) {
@@ -491,6 +340,7 @@ int main(int argc, char** argv) {
 		//usage(argv[0]);
     //}
     
+    // Big fscking array
     uint8_t *BFA = malloc(sizeof(uint8_t)*(CLUST_LAST & FAT12_MASK));
 
     for(int i=0; i< (CLUST_LAST & FAT12_MASK);i++) {
@@ -501,24 +351,25 @@ int main(int argc, char** argv) {
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
-	uint16_t cluster = 0;
-	struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
-		int16_t followclust = getfollowclust(dirent, 0);
-		if (is_valid_cluster(followclust, bpb)){
-			follow_dir(followclust, 1, image_buf, bpb, BFA);
-			//printf("VALID\n");
-		}
-		dirent++;
-	}
-
-    handleorphans(BFA,image_buf,bpb);
+    // This is probably shit
+	// uint16_t cluster = 0;
+	// struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+	// for(int i = 0; i < bpb->bpbRootDirEnts; i++){
+	// 	int16_t followclust = getfollowclust(dirent, 0);
+	// 	if (is_valid_cluster(followclust, bpb)){
+	// 		follow_dir(followclust, 1, image_buf, bpb, BFA);
+	// 		//printf("VALID\n");
+	// 	}
+	// 	dirent++;
+	// }
+    //moderate shit
+   // handleorphans(BFA,image_buf,bpb);
 	
+
+    //Not shit
     unmmap_file(image_buf, &fd);
     free(BFA);
 
 
-    // printf("%u\n", sizeof(int)*(bpb->bpbFATsecs));
-   // printf("BIG FUCKING ARRAY SIZE %u\n", CLUST_LAST & FAT12_MASK);
     return 0;
 }
