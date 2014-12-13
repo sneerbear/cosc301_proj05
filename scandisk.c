@@ -94,20 +94,13 @@ uint16_t getfollowclust(struct direntry *dirent, int indent) {
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
     uint16_t oldCluster = 0;
-    printf("clust: %u\n", cluster);
 	int size = 0; //There is no cluster 0?
 	while (!is_end_of_file(cluster)){
-        if(cluster == (CLUST_BAD & FAT12_MASK)) {
-            if(oldCluster != 0) {
-                set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
-            }
-            break;
-        }
+		
         size += 512; 
-        //printf("%u\n", cluster);
+
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
-		//printf("here\n");
 	}
            
     int difference = size - (int)getulong(dirent->deFileSize);
@@ -116,7 +109,12 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
     if(difference < 0) {
 		char name[14];
 		get_name(name,dirent);
-        printf("%s is too small\n", name);
+        printf("%s is too small.\n", name);
+	}
+	if(difference > 512){
+		char name[14];
+		get_name(name,dirent);
+        printf("%s is too large.\n", name);
 	}
      
 }
