@@ -95,30 +95,39 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 	uint16_t cluster = getushort(dirent->deStartCluster);
     uint16_t oldCluster = 0;
 	int size = 0; //There is no cluster 0?
+	int filesize = (int)getulong(dirent->deFileSize);
 	while (!is_end_of_file(cluster)){
 		
-        size += 512; 
+		if(size != -1){
+        	size += 512; 
+		}
+		else if(size > filesize){
+			set_fat_entry(oldCluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
+		}
+		
+		if(size > filesize){
+			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
+			size = -1;
+		}
 
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
+		
 	}
-           
-    int difference = size - (int)getulong(dirent->deFileSize);
-
-    //Solution to case where file in directory is too large, reset to FAT table size
-    if(difference < 0) {
+	if(size == -1){
+		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
+		char name[14];
+		get_name(name,dirent);
+        printf("%s is too large. File size: %d\n", name, size);
+	}    
+    else if(size - filesize < 0) {
 		char name[14];
 		get_name(name,dirent);
         printf("%s is too small. File size: %d\n", name, size);
 		uint16_t sz = (uint16_t)size;
 		putushort(dirent->deFileSize, sz);
 	}
-	if(difference > 512){
-		char name[14];
-		get_name(name,dirent);
-        printf("%s is too large. File size: %d\n", name, size);
-	}
-     
+	
 }
 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA) {
@@ -380,7 +389,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage2.img", &fd);
+    image_buf = mmap_file("badimage1.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
