@@ -16,7 +16,7 @@
 #include "dos.h"
 
 void plsincrement(uint16_t clust,uint8_t *BFA) {
-    if(BFA[clust] > 1) { 
+    if(BFA[clust] == 1) { 
         printf("Problem, cluster %u has been touched twice.\n", clust); 
     } else { 
         BFA[clust]++; 
@@ -106,37 +106,40 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
     uint16_t oldCluster = 0;
 	int size = 0; //There is no cluster 0?
 	while (!is_end_of_file(cluster)){
+
         if(cluster == (CLUST_BAD & FAT12_MASK)) {
             if(oldCluster != 0) {
-                set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
+                set_fat_entry(cluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
             }
             break;
         }
+
         size += 512; 
-
-
-
+        printf("1\n");
         plsincrement(cluster,BFA); //Mark cluster as visited
 
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
 
         if(size > getushort(dirent->deFileSize)) {  
-
+            printf("%u > %u\n",size, getushort(dirent->deFileSize));
             printfile(dirent,image_buf,bpb);
-            printf("too small\n");
+            set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
 
-            //Solution to case where FATS
-            // while(!is_end_of_file(cluster)) { 
-            //     plsincrement(cluster,BFA); //Set BFA value to 1
+            while(1) {
+                printf("2\n");
+                plsincrement(cluster,BFA); 
+                oldCluster = cluster;
+                cluster = get_fat_entry(cluster, image_buf,bpb);  
+                set_fat_entry(oldCluster,CLUST_FREE & FAT12_MASK, image_buf,bpb);
 
-            //     set_fat_entry(oldCluster,CLUST_EOFS & FAT12_MASK,image_buf,bpb);
-            //     BFA[oldCluster] = 1;
-            //     oldCluster = cluster;
-            //     get_fat_entry(cluster, image_buf,bpb);                
-            // }
-            // set_fat_entry(cluster,CLUST_FREE & FAT12_MASK, image_buf,bpb);
-            //BFA[cluster] = 2;
+                if(is_end_of_file(cluster)) {
+                    set_fat_entry(cluster,CLUST_FREE & FAT12_MASK, image_buf,bpb);
+                    printf("3\n");
+                    plsincrement(cluster,BFA);
+                    break;
+                }              
+            }
             //Fix things here! 
             break;  // THIS IS REALLY STUPID CIRCULAR CODE STRUCTURE, 
                     // SHOULD PROBABLY REASSESS LATER 
@@ -463,8 +466,7 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
                 strcat(filename,num);
                 strcat(filename,".dat");
 
-
-                dirent = find_file(filename, 0, 1, image_buf, bpb);
+                dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
                 if (dirent == NULL) 
                 {
                     fprintf(stderr, "Directory does not exists in the disk image\n");
@@ -472,14 +474,11 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
                 }
 
                 write_dirent(dirent,filename,i,512);
-
                 create_dirent(dirent, filename, i, 512,image_buf, bpb);
                 numOrphans++;
+                BFA[i]=1;
             }
         }
-        // } else if (BFA[i]==2) { 
-        //     difftoolarge(i,image_buf,bpb,BFA);
-        // }
     }
 }
 
@@ -498,7 +497,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage2.img", &fd);
+    image_buf = mmap_file("goodimage.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
