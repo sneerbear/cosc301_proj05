@@ -92,7 +92,9 @@ uint16_t getfollowclust(struct direntry *dirent, int indent) {
 
 #define printBFA(BFA) \
     for(int i = CLUST_FIRST&FAT12_MASK;i<(CLUST_LAST&FAT12_MASK);i++) { \
-        printf("%u - %u\n", i,BFA[i]); \
+		if(BFA[i] == 1){ \
+        	printf("%u - %u\n", i,BFA[i]); \
+		}\
     } 
 
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
@@ -153,8 +155,6 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		uint16_t sz = (uint16_t)size;
 		putushort(dirent->deFileSize, sz);
 	}
-
-    printBFA(BFA);
 	
 }
 
@@ -375,24 +375,25 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
-    for(int i=(int)CLUST_FIRST; i < (CLUST_LAST & FAT12_MASK); i++) {
-        if(BFA[i]==0) {
+	int endfat = bpb->bpbSectors - 33;
+    for(int i=(int)CLUST_FIRST; i < endfat; i++) {
+        if(BFA[i] == 0) {
 			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
             if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
 				
-				if(!is_valid_cluster(newclust, bpb)){
-					continue;
-				}
-				
+				//if(!is_valid_cluster(newclust, bpb)){
+				//	continue;
+				//}
 				//printf("ORPHAN HEAD CANDIDATE: %d has value %u\n",i,get_fat_entry((uint16_t)i,image_buf, bpb));
 				
-				uint16_t cluster = (uint16_t)i;
 				BFA[i] = 8; //Signals head of orphan
+				uint16_t cluster = (uint16_t)i;
+				cluster = get_fat_entry(cluster, image_buf, bpb);
 				while (!is_end_of_file(cluster)){
 					
 			        if(BFA[cluster] > 0 && BFA[cluster] < 7) {
-			            //printf("%s\n", "Multiple impressions on one cluster");
-						//printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
+			            printf("%s\n", "Multiple impressions on one cluster");
+						printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
 						BFA[i] = 1;
 						break;
 			        } 
