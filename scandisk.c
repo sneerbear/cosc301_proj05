@@ -109,12 +109,14 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
     if(difference < 0) {
 		char name[14];
 		get_name(name,dirent);
-        printf("%s is too small.\n", name);
+        printf("%s is too small. File size: %d\n", name, size);
+		uint16_t sz = (uint16_t)size;
+		putushort(dirent->deFileSize, sz);
 	}
 	if(difference > 512){
 		char name[14];
 		get_name(name,dirent);
-        printf("%s is too large.\n", name);
+        printf("%s is too large. File size: %d\n", name, size);
 	}
      
 }
@@ -124,8 +126,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 	while (is_valid_cluster(cluster, bpb)) {
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
         int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
-        int i = 0;
-		for ( ; i < numDirEntries; i++){
+		for (int i = 0; i < numDirEntries; i++){
             uint16_t followclust = getfollowclust(dirent, indent);
 			if(getushort(dirent->deStartCluster) != 0){
 				trace(dirent, image_buf, bpb, BFA);                
@@ -379,7 +380,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage1.img", &fd);
+    image_buf = mmap_file("badimage2.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
