@@ -90,6 +90,10 @@ uint16_t getfollowclust(struct direntry *dirent, int indent) {
     return followclust;        
 }     
 
+#define printBFA(BFA) \
+    for(int i = CLUST_FIRST&FAT12_MASK;i<(CLUST_LAST&FAT12_MASK);i++) { \
+        printf("%u - %u\n", i,BFA[i]); \
+    } 
 
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
@@ -149,6 +153,8 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		uint16_t sz = (uint16_t)size;
 		putushort(dirent->deFileSize, sz);
 	}
+
+    printBFA(BFA);
 	
 }
 
