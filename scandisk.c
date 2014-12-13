@@ -55,7 +55,6 @@ void get_name(char *fullname, struct direntry *dirent)
     }
 }
 
-
 uint16_t getfollowclust(struct direntry *dirent, int indent) {     
     uint16_t followclust = 0;      
        
@@ -89,13 +88,6 @@ uint16_t getfollowclust(struct direntry *dirent, int indent) {
     }      
     return followclust;        
 }     
-
-#define printBFA(BFA) \
-    for(int i = CLUST_FIRST&FAT12_MASK;i<(CLUST_LAST&FAT12_MASK);i++) { \
-		if(BFA[i] == 1){ \
-        	printf("%u - %u\n", i,BFA[i]); \
-		}\
-    } 
 
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
@@ -134,8 +126,6 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 			BFA[oldCluster]++;
         }
 	}
-
-	
 	if(size == -1){
 		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
 		char name[14];
@@ -155,11 +145,9 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		uint16_t sz = (uint16_t)size;
 		putushort(dirent->deFileSize, sz);
 	}
-	
 }
 
-void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA) {
-    
+void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA) {    
 	while (is_valid_cluster(cluster, bpb)) {
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
         int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
@@ -172,7 +160,6 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
                 follow_dir(followclust, indent+1, image_buf, bpb, BFA);
             dirent++;
 		}
-
 		cluster = get_fat_entry(cluster, image_buf, bpb);
     }
 }
@@ -279,7 +266,6 @@ void create_dirent(struct direntry *dirent, char *filename,
 
 #define FIND_FILE 0
 #define FIND_DIR 1
-
 struct direntry* find_file(char *infilename, uint16_t cluster,
                int find_mode,
                uint8_t *image_buf, struct bpb33* bpb)
@@ -381,16 +367,11 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
             if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
 				
-				//if(!is_valid_cluster(newclust, bpb)){
-				//	continue;
-				//}
-				//printf("ORPHAN HEAD CANDIDATE: %d has value %u\n",i,get_fat_entry((uint16_t)i,image_buf, bpb));
-				
 				BFA[i] = 8; //Signals head of orphan
 				uint16_t cluster = (uint16_t)i;
 				cluster = get_fat_entry(cluster, image_buf, bpb);
 				while (!is_end_of_file(cluster)){
-					
+
 			        if(BFA[cluster] > 0 && BFA[cluster] < 7) {
 			            printf("%s\n", "Multiple impressions on one cluster");
 						printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
@@ -408,7 +389,6 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 					
 					cluster = get_fat_entry(cluster, image_buf, bpb);	
 				}
-
 				if(BFA[i] == 8){
 					printf("Orphan Candidate: %d\n",i);
 				}
@@ -420,20 +400,12 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
         if(BFA[i]==8) {
             numOrphans++;
             struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb);
-            //dirent->deName = SLOT_EMPTY;
             char *num = malloc(sizeof(char)*4);
             snprintf(num, sizeof(num), "%d", numOrphans);
-
             char *filename = malloc(5+4+sizeof(num));
             strcpy(filename,"found");
             strcat(filename,num);
             strcat(filename,".dat");
-            printf("%s\n",filename);
-            // dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
-            // if (dirent == NULL) {
-            //    fprintf(stderr, "Directory does not exists in the disk image\n");
-            //    //exit(1);
-            // }
 
             create_dirent(dirent,filename,i,512,image_buf,bpb);
             BFA[i]=1;
@@ -441,17 +413,13 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
             free(num);
         }
     }
-}
-
+} 
 
 int main(int argc, char** argv) {
     uint8_t *image_buf;
     int fd;
     struct bpb33* bpb;
-    //if (argc < 2) {
-		//usage(argv[0]);
-    //}
-    
+
     // Big fscking array
     uint8_t *BFA = malloc(sizeof(uint8_t)*(CLUST_LAST & FAT12_MASK));
 
@@ -459,7 +427,12 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage4.img", &fd);
+    if (argc < 2) {
+        usage(argv[0]);
+    }
+
+
+    image_buf = mmap_file(argv[1], &fd);
     bpb = check_bootsector(image_buf);
 
 	uint16_t cluster = 0;
@@ -472,11 +445,8 @@ int main(int argc, char** argv) {
 		dirent++;
 	}
     handleorphans(BFA,image_buf,bpb);
-	
     unmmap_file(image_buf, &fd);
     free(BFA);
 	free(bpb);
-
-
     return 0;
 }
