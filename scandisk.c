@@ -313,12 +313,8 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
         if(BFA[i]==0) {
             if(get_fat_entry(i,image_buf,bpb) != (CLUST_FREE & FAT12_MASK)) {
                 struct direntry *dirent = (void *)1;
-                char *num = malloc(sizeof(char)*4);
-                snprintf(num, sizeof(num), "%d", numOrphans);
-                char *filename = malloc(5+4+sizeof(num));
-                strcpy(filename,"found");
-                strcat(filename,num);
-                strcat(filename,".dat");
+                char *filename = malloc(32);
+                snprintf(filename, sizeof(filename), "found%d.dat", numOrphans);
 
                 dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
                 if (dirent == NULL) 
@@ -331,6 +327,8 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
                 create_dirent(dirent, filename, i, 512,image_buf, bpb);
                 numOrphans++;
                 BFA[i]=1;
+
+                free(filename);
             }
         }
     }
@@ -363,7 +361,7 @@ int main(int argc, char** argv) {
 		int16_t followclust = getfollowclust(dirent, 0);
 		if (is_valid_cluster(followclust, bpb)){
 			follow_dir(followclust, 1, image_buf, bpb, BFA);
-			printf("followclust")
+			printf("followclust");
 		}
 		dirent++;
 	}
