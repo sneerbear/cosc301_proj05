@@ -112,12 +112,22 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
+		
+		if(cluster == (CLUST_BAD & FAT12_MASK)){
+			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
+			size -= 512;
+		}
+		
         if(BFA[oldCluster]> 0) {
             printf("%s\n", "Multiple impressions on one cluster");
-        } else {
+        } 
+		else {
 		  BFA[oldCluster]++;
         }
 	}
+	
+	BFA[cluster]++;
+	
 	if(size == -1){
 		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
 		char name[14];
@@ -352,7 +362,8 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     int numOrphans = 0;
-    for(uint16_t i=CLUST_FIRST; i < sizeof(BFA)/sizeof(uint16_t); i++) {
+    for(int i=(int)CLUST_FIRST; i < (CLUST_LAST & FAT12_MASK); i++) {
+		
         if(BFA[i]==0) {
             if(get_fat_entry(i,image_buf,bpb) != (CLUST_FREE & FAT12_MASK)) {
                 struct direntry *dirent = (void *)1;
@@ -408,7 +419,7 @@ int main(int argc, char** argv) {
 		dirent++;
 	}
     //moderate shit
-    //handleorphans(BFA,image_buf,bpb);
+    handleorphans(BFA,image_buf,bpb);
 	
 
     //Not shit
