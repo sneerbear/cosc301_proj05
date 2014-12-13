@@ -376,7 +376,7 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 	int endfat = bpb->bpbSectors - 33;
-    for(int i=(int)CLUST_FIRST; i < endfat; i++) {
+    for(int i=endfat-1; i >= (int)CLUST_FIRST; i--) {
         if(BFA[i] == 0) {
 			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
             if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
@@ -398,41 +398,49 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 						break;
 			        } 
 					else if(BFA[cluster] == 8) {
-					  	BFA[cluster] = 1;
+					   printf("Orphan %u no longer orphan head\n",i);
+                        BFA[cluster] = 1;
+                        break;
 			        }
 					else{
 						BFA[cluster]++;
 					}
 					
-					cluster = get_fat_entry(cluster, image_buf, bpb);
-					
+					cluster = get_fat_entry(cluster, image_buf, bpb);	
 				}
-				
+
 				if(BFA[i] == 8){
 					printf("Orphan Candidate: %d\n",i);
 				}
-
-				
-			
-                //struct direntry *dirent = (void *)1;
-                //char *filename = malloc(32);
-                //snprintf(filename, sizeof(filename), "found%d.dat", numOrphans);
-
-                //dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
-                //if (dirent == NULL) {
-                //    fprintf(stderr, "Directory does not exists in the disk image\n");
-                //    exit(1);
-                //}
-
-                //write_dirent(dirent,filename,i,512);
-                //create_dirent(dirent, filename, i, 512,image_buf, bpb);
-                //numOrphans++;
-                //BFA[i]=1;
-
-                //free(filename);
 			}
     	}
 	}
+    int numOrphans=0;
+    for(int i=CLUST_FIRST & FAT12_MASK; i < endfat; i++) {
+        if(BFA[i]==8) {
+            numOrphans++;
+            struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb);
+            //dirent->deName = SLOT_EMPTY;
+            char *num = malloc(sizeof(char)*4);
+            snprintf(num, sizeof(num), "%d", numOrphans);
+
+            char *filename = malloc(5+4+sizeof(num));
+            strcpy(filename,"found");
+            strcat(filename,num);
+            strcat(filename,".dat");
+            printf("%s\n",filename);
+            // dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
+            // if (dirent == NULL) {
+            //    fprintf(stderr, "Directory does not exists in the disk image\n");
+            //    //exit(1);
+            // }
+
+            create_dirent(dirent,filename,i,512,image_buf,bpb);
+            BFA[i]=1;
+            free(filename);
+            free(num);
+        }
+    }
 }
 
 
