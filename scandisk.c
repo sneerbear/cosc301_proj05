@@ -27,12 +27,11 @@ void get_name(char *fullname, struct direntry *dirent)
     memcpy(extension, dirent->deExtension, 3);
 
     /* names are space padded - remove the padding */
-    for (i = 8; i > 0; i--) 
-    {
-    if (name[i] == ' ') 
-        name[i] = '\0';
-    else 
-        break;
+    for (i = 8; i > 0; i--) {
+    	if (name[i] == ' ') 
+        	name[i] = '\0';
+    	else 
+        	break;
     }
 
     /* extensions aren't normally space padded - but remove the
@@ -55,39 +54,93 @@ void get_name(char *fullname, struct direntry *dirent)
     }
 }
 
-uint16_t getfollowclust(struct direntry *dirent, int indent) {     
-    uint16_t followclust = 0;      
-       
-    char name[9];      
-    char extension[4];     
-    //uint32_t size;       
-    uint16_t file_cluster;     
-    name[8] = ' ';     
-    extension[3] = ' ';        
-    memcpy(name, &(dirent->deName[0]), 8);     
-    memcpy(extension, dirent->deExtension, 3);     
-    if (name[0] == SLOT_EMPTY) {       
-       return followclust;     
-    }      
-       
-    /* skip over deleted entries */        
-    if (((uint8_t)name[0]) == SLOT_DELETED) {      
-   return followclust;     
-    }      
-       
-    if (((uint8_t)name[0]) == 0x2E) {      
-   // dot entry ("." or "..")      
-   // skip it      
-        return followclust;        
-    }      
-    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {       
-       if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {      
-            file_cluster = getushort(dirent->deStartCluster);      
-            followclust = file_cluster;        
-        }      
-    }      
-    return followclust;        
-}     
+
+void print_indent(int indent)
+{
+    int i;
+    for (i = 0; i < indent*4; i++)
+	printf(" ");
+}
+
+uint16_t getfollowclust(struct direntry *dirent, int indent, uint8_t *BFA) {     
+    uint16_t followclust = 0;
+
+    int i;
+    char name[9];
+    char extension[4];
+    uint32_t size;
+    uint16_t file_cluster;
+    name[8] = ' ';
+    extension[3] = ' ';
+    memcpy(name, &(dirent->deName[0]), 8);
+    memcpy(extension, dirent->deExtension, 3);
+    if (name[0] == SLOT_EMPTY)
+    {
+	return followclust;
+    }
+
+    /* skip over deleted entries */
+    if (((uint8_t)name[0]) == SLOT_DELETED)
+    {
+	return followclust;
+    }
+
+    if (((uint8_t)name[0]) == 0x2E)
+    {
+	// dot entry ("." or "..")
+	// skip it
+        return followclust;
+    }
+
+    /* names are space padded - remove the spaces */
+    for (i = 8; i > 0; i--) 
+    {
+	if (name[i] == ' ') 
+	    name[i] = '\0';
+	else 
+	    break;
+    }
+
+    /* remove the spaces from extensions */
+    for (i = 3; i > 0; i--) 
+    {
+	if (extension[i] == ' ') 
+	    extension[i] = '\0';
+	else 
+	    break;
+    }
+
+    if ((dirent->deAttributes & ATTR_WIN95LFN) == ATTR_WIN95LFN)
+    {
+	// ignore any long file name extension entries
+	//
+	// printf("Win95 long-filename entry seq 0x%0x\n", dirent->deName[0]);
+    }
+    else if ((dirent->deAttributes & ATTR_VOLUME) != 0) 
+    {
+	printf("Volume: %s\n", name);
+    } 
+    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) 
+    {
+        // don't deal with hidden directories; MacOS makes these
+        // for trash directories and such; just ignore them.
+		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
+        	{
+	    		print_indent(indent);
+    	    	printf("%s/ (directory)\n", name);
+            	file_cluster = getushort(dirent->deStartCluster);
+            	followclust = file_cluster;
+        	}
+    	}
+    	else 
+    	{
+			printf("Clust num: %u\n",getushort(dirent->deStartCluster));
+			BFA[getushort(dirent->deStartCluster)] = 1;
+        	
+    	}
+
+    	   return followclust;
+}
 
 void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8_t *BFA){
 	uint16_t cluster = getushort(dirent->deStartCluster);
@@ -125,10 +178,10 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		}
 		
         if(BFA[oldCluster]> 0) {
-            printf("%s\n", "Multiple impressions on one cluster");
+            //printf("Multiple impressions on one cluster: %u\n", oldCluster);
         } 
 		else {
-			BFA[oldCluster]++;
+			BFA[oldCluster] = 1;
         }
 	}
 	
@@ -164,7 +217,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
         int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
 		for (int i = 0; i < numDirEntries; i++){
-            uint16_t followclust = getfollowclust(dirent, indent);
+            uint16_t followclust = getfollowclust(dirent, indent, BFA);
 			if(getushort(dirent->deStartCluster) != 0){
 				trace(dirent, image_buf, bpb, BFA);                
 			}
@@ -362,7 +415,7 @@ int main(int argc, char** argv) {
 	uint16_t cluster = 0;
 	struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
 	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
-		int16_t followclust = getfollowclust(dirent, 0);
+		int16_t followclust = getfollowclust(dirent, 0, BFA);
 		if (is_valid_cluster(followclust, bpb)){
 			follow_dir(followclust, 1, image_buf, bpb, BFA);
 		}

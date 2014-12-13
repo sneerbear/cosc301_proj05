@@ -12,6 +12,7 @@
 #include "bpb.h"
 #include "direntry.h"
 #include "fat.h"
+#include "dos.h"
 
 
 void print_indent(int indent)
@@ -85,36 +86,36 @@ uint16_t print_dirent(struct direntry *dirent, int indent)
     {
         // don't deal with hidden directories; MacOS makes these
         // for trash directories and such; just ignore them.
-	if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
-        {
-	    print_indent(indent);
-    	    printf("%s/ (directory)\n", name);
-            file_cluster = getushort(dirent->deStartCluster);
-            followclust = file_cluster;
-        }
-    }
-    else 
-    {
-        /*
-         * a "regular" file entry
-         * print attributes, size, starting cluster, etc.
-         */
-	int ro = (dirent->deAttributes & ATTR_READONLY) == ATTR_READONLY;
-	int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
-	int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
-	int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
-
-	size = getulong(dirent->deFileSize);
-	print_indent(indent);
-	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
-	       name, extension, size, getushort(dirent->deStartCluster),
-	       ro?'r':' ', 
+		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
+        	{
+	    		print_indent(indent);
+    	    	printf("%s/ (directory)\n", name);
+            	file_cluster = getushort(dirent->deStartCluster);
+            	followclust = file_cluster;
+        	}
+    	}
+    	else 
+    	{
+        	/*
+         	* a "regular" file entry
+         	* print attributes, size, starting cluster, etc.
+         	*/
+			int ro = (dirent->deAttributes & ATTR_READONLY) == ATTR_READONLY;
+			int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
+			int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
+			int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
+			
+			size = getulong(dirent->deFileSize);
+			print_indent(indent);
+			printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
+	       	name, extension, size, getushort(dirent->deStartCluster),
+	       	ro?'r':' ', 
                hidden?'h':' ', 
                sys?'s':' ', 
                arch?'a':' ');
-    }
+    	   }
 
-    return followclust;
+    	   return followclust;
 }
 
 
@@ -173,7 +174,7 @@ int main(int argc, char** argv)
     struct bpb33* bpb;
     if (argc != 2)
     {
-		usage(argv[0]);
+	usage(argv[0]);
     }
 
     image_buf = mmap_file(argv[1], &fd);
