@@ -113,6 +113,7 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
         oldCluster = cluster;
         cluster = get_fat_entry(cluster, image_buf, bpb);
 		
+		
 		if(cluster == (CLUST_BAD & FAT12_MASK)){
 			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
 			size -= 512;
@@ -124,8 +125,6 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
             printf("%s\n", "Multiple impressions on one cluster");
         } 
 		else {
-			if(cluster == 1009)
-				printf("I CURED THAT BITCH\n");
 			BFA[oldCluster]++;
         }
 	}
@@ -364,16 +363,16 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
-    int numOrphans = 0;
     for(int i=(int)CLUST_FIRST; i < (CLUST_LAST & FAT12_MASK); i++) {
 		
         if(BFA[i]==0) {
 			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
             if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
 				
-				if(newclust == (CLUST_EOFS & FAT12_MASK)){
-					printf("PROBLEM\n");
-					return;
+				printf("ORPHAN HEAD CANDIDATE: %d has value %u\n",i,get_fat_entry((uint16_t)i,image_buf, bpb));
+				
+				if(!is_valid_cluster(newclust, bpb)){
+					continue;
 				}
 				
 				uint16_t cluster = (uint16_t)i;
@@ -437,7 +436,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage1.img", &fd);
+    image_buf = mmap_file("goodimage.img", &fd);
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
