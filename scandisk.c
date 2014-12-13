@@ -115,8 +115,8 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		
 		
 		if(cluster == (CLUST_BAD & FAT12_MASK)){
-			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
-			size -= 512;
+			putushort(dirent->deFileSize, (uint16_t)size);
+			size = -2;
 			BFA[oldCluster]++;
 			break;
 		}
@@ -135,7 +135,13 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		char name[14];
 		get_name(name,dirent);
         printf("%s is too large.\n", name);
-	}    
+	}  
+	else if(size == -2){
+		set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
+		char name[14];
+		get_name(name,dirent);
+        printf("%s has a bad cluster.\n", name);
+	}  
     else if(size - filesize < 0) {
 		char name[14];
 		get_name(name,dirent);
@@ -438,7 +444,7 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("badimage5.img", &fd);
+    image_buf = mmap_file("badimage4.img", &fd);
     bpb = check_bootsector(image_buf);
 
 	uint16_t cluster = 0;
