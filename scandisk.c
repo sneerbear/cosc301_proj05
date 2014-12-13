@@ -101,7 +101,7 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		if(size != -1){
         	size += 512; 
 		}
-		else if(size > filesize){
+		else if(size-512 > filesize){
 			set_fat_entry(oldCluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
 		}
 		
@@ -118,12 +118,12 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
 		char name[14];
 		get_name(name,dirent);
-        printf("%s is too large. File size: %d\n", name, size);
+        printf("%s is too large.\n", name);
 	}    
     else if(size - filesize < 0) {
 		char name[14];
 		get_name(name,dirent);
-        printf("%s is too small. File size: %d\n", name, size);
+        printf("%s is too small.\n", name);
 		uint16_t sz = (uint16_t)size;
 		putushort(dirent->deFileSize, sz);
 	}
