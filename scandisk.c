@@ -364,24 +364,25 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     for(int i=(int)CLUST_FIRST; i < (CLUST_LAST & FAT12_MASK); i++) {
-		
         if(BFA[i]==0) {
 			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
             if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
-				
-				printf("ORPHAN HEAD CANDIDATE: %d has value %u\n",i,get_fat_entry((uint16_t)i,image_buf, bpb));
 				
 				if(!is_valid_cluster(newclust, bpb)){
 					continue;
 				}
 				
+				//printf("ORPHAN HEAD CANDIDATE: %d has value %u\n",i,get_fat_entry((uint16_t)i,image_buf, bpb));
+				
 				uint16_t cluster = (uint16_t)i;
+				BFA[i] = 8; //Signals head of orphan
 				while (!is_end_of_file(cluster)){
 					
 			        if(BFA[cluster] > 0 && BFA[cluster] < 7) {
-			            printf("%s\n", "Multiple impressions on one cluster");
-						printf("Cluster: %u has value %u\n",cluster,get_fat_entry(cluster,image_buf, bpb));
-						return;
+			            //printf("%s\n", "Multiple impressions on one cluster");
+						//printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
+						BFA[i] = 1;
+						break;
 			        } 
 					else if(BFA[cluster] == 8) {
 					  	BFA[cluster] = 1;
@@ -394,7 +395,10 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 					
 				}
 				
-				BFA[i] = 8; //Signals head of orphan
+				if(BFA[i] == 8){
+					printf("Orphan Candidate: %d\n",i);
+				}
+
 				
 			
                 //struct direntry *dirent = (void *)1;
@@ -413,8 +417,6 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
                 //BFA[i]=1;
 
                 //free(filename);
-				//There is no memory leak, only zool.
-          
 			}
     	}
 	}
@@ -436,11 +438,9 @@ int main(int argc, char** argv) {
         BFA[i] = 0;
     }
 
-    image_buf = mmap_file("goodimage.img", &fd);
+    image_buf = mmap_file("badimage5.img", &fd);
     bpb = check_bootsector(image_buf);
 
-    // your code should start here...
-    //This is probably shit
 	uint16_t cluster = 0;
 	struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
 	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
@@ -450,11 +450,8 @@ int main(int argc, char** argv) {
 		}
 		dirent++;
 	}
-    //moderate shit
     handleorphans(BFA,image_buf,bpb);
 	
-
-    //Not shit
     unmmap_file(image_buf, &fd);
     free(BFA);
 	free(bpb);
