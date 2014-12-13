@@ -264,101 +264,6 @@ void create_dirent(struct direntry *dirent, char *filename,
     }
 }
 
-#define FIND_FILE 0
-#define FIND_DIR 1
-struct direntry* find_file(char *infilename, uint16_t cluster,
-               int find_mode,
-               uint8_t *image_buf, struct bpb33* bpb)
-{
-    char buf[MAXPATHLEN];
-    char *seek_name, *next_name;
-    int d;
-    struct direntry *dirent;
-    uint16_t dir_cluster;
-    char fullname[13];
-
-    /* find the first dirent in this directory */
-    dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-
-    strncpy(buf, infilename, MAXPATHLEN);
-    seek_name = buf;
-
-    /* trim leading slashes */
-    while (*seek_name == '/' || *seek_name == '\\') {
-    	seek_name++;
-    }
-
-    /* search for any more slashes - if so, it's a dirname */
-    next_name = seek_name;
-    while (1) {
-    	if (*next_name == '/' || *next_name == '\\') {
-        	*next_name = '\0';
-        	next_name ++;
-        	break;
-   	 	}
-    	if (*next_name == '\0') {
-        	/* end of name - no slashes found */
-        	next_name = NULL;
-        	if (find_mode == FIND_DIR) {
-        		return dirent;
-        	}
-        	break;
-    	}
-    	next_name++;
-    }
-
-    while (1) {
-
-    	for (d = 0; d < bpb->bpbBytesPerSec * bpb->bpbSecPerClust; d += sizeof(struct direntry)) {
-        	if (dirent->deName[0] == SLOT_EMPTY) {
-        		/* we failed to find the file */
-        		return NULL;
-			}
-
-        	if (dirent->deName[0] == SLOT_DELETED) {
-        		/* skip over a deleted file */
-        		dirent++;
-        		continue;
-        	}
-
-			get_name(fullname, dirent);
-			if (strcmp(fullname, seek_name)==0) {
-				/* found it! */
- 			   if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
- 				   /* it's a directory */
- 				   if (next_name == NULL) {
-  					   fprintf(stderr, "Cannot copy out a directory\n");
-   					   exit(1);
-    				}
-     			   	dir_cluster = getushort(dirent->deStartCluster);
-    				return find_file(next_name, dir_cluster, find_mode, image_buf, bpb);
-    			} 
-     		   else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
-     			   /* it's a volume */
-         		   fprintf(stderr, "Cannot copy out a volume\n");
-          		   exit(1);
-       	 	   } 
-       	 	   else {
-				   /* assume it's a file */
-         		   return dirent;
-			   }
-        	}
-        	dirent++;
-    	}
-
-   	 	/* we've reached the end of the cluster for this directory.
-       	Where's the next cluster? */
- 	   	if (cluster == 0) {
- 		   	// root dir is special
-			dirent++;
-		} 
-		else {
-			cluster = get_fat_entry(cluster, image_buf, bpb);
-			dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-		}
-	}
-}
-
 //Doesn't fscking work
 void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 	int endfat = bpb->bpbSectors - 33;
@@ -373,13 +278,13 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 				while (!is_end_of_file(cluster)){
 
 			        if(BFA[cluster] > 0 && BFA[cluster] < 7) {
-			            printf("%s\n", "Multiple impressions on one cluster");
-						printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
+			            //printf("%s\n", "Multiple impressions on one cluster");
+						//printf("Cluster: %u has value %u\n",cluster,BFA[cluster]);
 						BFA[i] = 1;
 						break;
 			        } 
 					else if(BFA[cluster] == 8) {
-					   printf("Orphan %u no longer orphan head\n",i);
+					   //printf("Orphan %u no longer orphan head\n",i);
                         BFA[cluster] = 1;
                         break;
 			        }
@@ -390,7 +295,7 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 					cluster = get_fat_entry(cluster, image_buf, bpb);	
 				}
 				if(BFA[i] == 8){
-					printf("Orphan Candidate: %d\n",i);
+					//printf("Orphan Candidate: %d\n",i);
 				}
 			}
     	}
@@ -398,11 +303,17 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     int numOrphans=0;
     for(int i=CLUST_FIRST & FAT12_MASK; i < endfat; i++) {
         if(BFA[i]==8) {
+			//printf("Orphan %d\n",i);
+			uint16_t cluster= (uint16_t)i;
+			while (!is_end_of_file(cluster)){
+				printf("Cluster: %u\n",cluster);
+				cluster = get_fat_entry(cluster, image_buf, bpb);	
+			}
             numOrphans++;
             struct direntry *dirent = (struct direntry*)cluster_to_addr(0, image_buf, bpb);
             char *num = malloc(sizeof(char)*4);
             snprintf(num, sizeof(num), "%d", numOrphans);
-            char *filename = malloc(5+4+sizeof(num));
+            char *filename = malloc(5+4+sizeof(num)+1);
             strcpy(filename,"found");
             strcat(filename,num);
             strcat(filename,".dat");
@@ -414,6 +325,126 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
         }
     }
 } 
+
+void print_indent(int indent)
+{
+    int i;
+    for (i = 0; i < indent*4; i++)
+	printf(" ");
+}
+
+uint16_t print_dirent(struct direntry *dirent, int indent)
+{
+    uint16_t followclust = 0;
+
+    int i;
+    char name[9];
+    char extension[4];
+    uint32_t size;
+    uint16_t file_cluster;
+    name[8] = ' ';
+    extension[3] = ' ';
+    memcpy(name, &(dirent->deName[0]), 8);
+    memcpy(extension, dirent->deExtension, 3);
+    if (name[0] == SLOT_EMPTY)
+    {
+	return followclust;
+    }
+
+    /* skip over deleted entries */
+    if (((uint8_t)name[0]) == SLOT_DELETED)
+    {
+	return followclust;
+    }
+
+    if (((uint8_t)name[0]) == 0x2E)
+    {
+	// dot entry ("." or "..")
+	// skip it
+        return followclust;
+    }
+
+    /* names are space padded - remove the spaces */
+    for (i = 8; i > 0; i--) 
+    {
+	if (name[i] == ' ') 
+	    name[i] = '\0';
+	else 
+	    break;
+    }
+
+    /* remove the spaces from extensions */
+    for (i = 3; i > 0; i--) 
+    {
+	if (extension[i] == ' ') 
+	    extension[i] = '\0';
+	else 
+	    break;
+    }
+
+    if ((dirent->deAttributes & ATTR_WIN95LFN) == ATTR_WIN95LFN)
+    {
+	// ignore any long file name extension entries
+	//
+	// printf("Win95 long-filename entry seq 0x%0x\n", dirent->deName[0]);
+    }
+    else if ((dirent->deAttributes & ATTR_VOLUME) != 0) 
+    {
+	printf("Volume: %s\n", name);
+    } 
+    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) 
+    {
+        // don't deal with hidden directories; MacOS makes these
+        // for trash directories and such; just ignore them.
+	if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN)
+        {
+	    print_indent(indent);
+    	    printf("%s/ (directory)\n", name);
+            file_cluster = getushort(dirent->deStartCluster);
+            followclust = file_cluster;
+        }
+    }
+    else 
+    {
+        /*
+         * a "regular" file entry
+         * print attributes, size, starting cluster, etc.
+         */
+	int ro = (dirent->deAttributes & ATTR_READONLY) == ATTR_READONLY;
+	int hidden = (dirent->deAttributes & ATTR_HIDDEN) == ATTR_HIDDEN;
+	int sys = (dirent->deAttributes & ATTR_SYSTEM) == ATTR_SYSTEM;
+	int arch = (dirent->deAttributes & ATTR_ARCHIVE) == ATTR_ARCHIVE;
+
+	size = getulong(dirent->deFileSize);
+	print_indent(indent);
+	printf("%s.%s (%u bytes) (starting cluster %d) %c%c%c%c\n", 
+	       name, extension, size, getushort(dirent->deStartCluster),
+	       ro?'r':' ', 
+               hidden?'h':' ', 
+               sys?'s':' ', 
+               arch?'a':' ');
+    }
+
+    return followclust;
+}
+
+void print_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb) {    
+	while (is_valid_cluster(cluster, bpb)) {
+        struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+        int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
+		for (int i = 0; i < numDirEntries; i++){
+            uint16_t followclust = getfollowclust(dirent, indent);
+			if(getushort(dirent->deStartCluster) != 0){
+				print_dirent(dirent, 4);                
+			}
+            if (followclust)
+                print_dir(followclust, indent+1, image_buf, bpb);
+            dirent++;
+		}
+		cluster = get_fat_entry(cluster, image_buf, bpb);
+    }
+}
+
 
 int main(int argc, char** argv) {
     uint8_t *image_buf;
@@ -444,7 +475,21 @@ int main(int argc, char** argv) {
 		}
 		dirent++;
 	}
+	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
+		int16_t followclust = getfollowclust(dirent, 0);
+		if (is_valid_cluster(followclust, bpb)){
+			print_dir(followclust, 1, image_buf, bpb);
+		}
+		dirent++;
+	}
     handleorphans(BFA,image_buf,bpb);
+	for(int i = 0; i < bpb->bpbRootDirEnts; i++){
+		int16_t followclust = getfollowclust(dirent, 0);
+		if (is_valid_cluster(followclust, bpb)){
+			print_dir(followclust, 1, image_buf, bpb);
+		}
+		dirent++;
+	}
     unmmap_file(image_buf, &fd);
     free(BFA);
 	free(bpb);
