@@ -116,17 +116,20 @@ void trace(struct direntry *dirent, uint8_t *image_buf, struct bpb33* bpb, uint8
 		if(cluster == (CLUST_BAD & FAT12_MASK)){
 			set_fat_entry(oldCluster, CLUST_EOFS & FAT12_MASK, image_buf, bpb);
 			size -= 512;
+			BFA[oldCluster]++;
+			break;
 		}
 		
         if(BFA[oldCluster]> 0) {
             printf("%s\n", "Multiple impressions on one cluster");
         } 
 		else {
-		  BFA[oldCluster]++;
+			if(cluster == 1009)
+				printf("I CURED THAT BITCH\n");
+			BFA[oldCluster]++;
         }
 	}
-	
-	BFA[cluster]++;
+
 	
 	if(size == -1){
 		set_fat_entry(cluster, CLUST_FREE & FAT12_MASK, image_buf, bpb);
@@ -365,27 +368,57 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     for(int i=(int)CLUST_FIRST; i < (CLUST_LAST & FAT12_MASK); i++) {
 		
         if(BFA[i]==0) {
-            if(get_fat_entry(i,image_buf,bpb) != (CLUST_FREE & FAT12_MASK)) {
-                struct direntry *dirent = (void *)1;
-                char *filename = malloc(32);
-                snprintf(filename, sizeof(filename), "found%d.dat", numOrphans);
+			uint16_t newclust = get_fat_entry(i,image_buf,bpb);
+            if(newclust != (CLUST_FREE & FAT12_MASK) && newclust != (CLUST_BAD & FAT12_MASK)) {
+				
+				if(newclust == (CLUST_EOFS & FAT12_MASK)){
+					printf("PROBLEM\n");
+					return;
+				}
+				
+				uint16_t cluster = (uint16_t)i;
+				while (!is_end_of_file(cluster)){
+					
+			        if(BFA[cluster] > 0 && BFA[cluster] < 7) {
+			            printf("%s\n", "Multiple impressions on one cluster");
+						printf("Cluster: %u has value %u\n",cluster,get_fat_entry(cluster,image_buf, bpb));
+						return;
+			        } 
+					else if(BFA[cluster] == 8) {
+					  	BFA[cluster] = 1;
+			        }
+					else{
+						BFA[cluster]++;
+					}
+					
+					cluster = get_fat_entry(cluster, image_buf, bpb);
+					
+				}
+				
+				BFA[i] = 8; //Signals head of orphan
+				
+			
+                //struct direntry *dirent = (void *)1;
+                //char *filename = malloc(32);
+                //snprintf(filename, sizeof(filename), "found%d.dat", numOrphans);
 
-                dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
-                if (dirent == NULL) 
-                {
-                    fprintf(stderr, "Directory does not exists in the disk image\n");
-                    exit(1);
-                }
+                //dirent = find_file(filename, 0xe5, FIND_FILE, image_buf, bpb);
+                //if (dirent == NULL) {
+                //    fprintf(stderr, "Directory does not exists in the disk image\n");
+                //    exit(1);
+                //}
 
-                write_dirent(dirent,filename,i,512);
-                create_dirent(dirent, filename, i, 512,image_buf, bpb);
-                numOrphans++;
-                BFA[i]=1;
+                //write_dirent(dirent,filename,i,512);
+                //create_dirent(dirent, filename, i, 512,image_buf, bpb);
+                //numOrphans++;
+                //BFA[i]=1;
 
-                free(filename);
-            }
-        }
-    }
+                //free(filename);
+				//There is no memory leak, only zool.
+          
+			}
+    	}
+	}
 }
 
 
