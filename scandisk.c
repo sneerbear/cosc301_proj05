@@ -15,6 +15,8 @@
 #include "fat.h"
 #include "dos.h"
 
+/* Jack Sneeringer and Mike Lese */
+
 void get_name(char *fullname, struct direntry *dirent) 
 {
     char name[9];
@@ -192,40 +194,34 @@ void write_dirent(struct direntry *dirent, char *filename,
     /* extract just the filename part */
     uppername = strdup(filename);
     p2 = uppername;
-    for (i = 0; i < strlen(filename); i++) 
-    {
-    if (p2[i] == '/' || p2[i] == '\\') 
-    {
-        uppername = p2+i+1;
-    }
+    for (i = 0; i < strlen(filename); i++) {
+    	if (p2[i] == '/' || p2[i] == '\\') {
+        	uppername = p2+i+1;
+    	}
     }
 
     /* convert filename to upper case */
-    for (i = 0; i < strlen(uppername); i++) 
-    {
-    uppername[i] = toupper(uppername[i]);
+    for (i = 0; i < strlen(uppername); i++) {
+    	uppername[i] = toupper(uppername[i]);
     }
 
     /* set the file name and extension */
     memset(dirent->deName, ' ', 8);
     p = strchr(uppername, '.');
     memcpy(dirent->deExtension, "___", 3);
-    if (p == NULL) 
-    {
-    fprintf(stderr, "No filename extension given - defaulting to .___\n");
+    if (p == NULL) {
+    	fprintf(stderr, "No filename extension given - defaulting to .___\n");
     }
-    else 
-    {
-    *p = '\0';
-    p++;
-    len = strlen(p);
-    if (len > 3) len = 3;
-    memcpy(dirent->deExtension, p, len);
+    else {
+    	*p = '\0';
+    	p++;
+    	len = strlen(p);
+    	if (len > 3) len = 3;
+    		memcpy(dirent->deExtension, p, len);
     }
 
-    if (strlen(uppername)>8) 
-    {
-    uppername[8]='\0';
+    if (strlen(uppername)>8) {
+    	uppername[8]='\0';
     }
     memcpy(dirent->deName, uppername, strlen(uppername));
     free(p2);
@@ -235,13 +231,7 @@ void write_dirent(struct direntry *dirent, char *filename,
     putushort(dirent->deStartCluster, start_cluster);
     putulong(dirent->deFileSize, size);
 
-    /* could also set time and date here if we really
-       cared... */
 }
-
-
-/* create_dirent finds a free slot in the directory, and write the
-   directory entry */
 
 void create_dirent(struct direntry *dirent, char *filename, 
            uint16_t start_cluster, uint32_t size,
@@ -272,8 +262,7 @@ void create_dirent(struct direntry *dirent, char *filename,
     }
 }
 
-//Doesn't fscking work
-void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
+void orphanage(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 	int endfat = bpb->bpbSectors - 33;
     for(int i=(int)CLUST_FIRST; i < endfat; i++) {
         if(BFA[i] == 0) {
@@ -303,7 +292,11 @@ void handleorphans(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
 			}
     	}
 	}
+}
+
+void adoptioncenter(uint8_t *BFA, uint8_t *image_buf, struct bpb33 *bpb) {
     int numOrphans=0;
+	int endfat = bpb->bpbSectors - 33;
     for(int i=CLUST_FIRST & FAT12_MASK; i < endfat; i++) {
         if(BFA[i]==8) {
 			int size = 0;
@@ -359,7 +352,8 @@ int main(int argc, char** argv) {
 		}
 		dirent++;
 	}
-    handleorphans(BFA,image_buf,bpb);
+    orphanage(BFA,image_buf,bpb);
+	adoptioncenter(BFA,image_buf,bpb);
     unmmap_file(image_buf, &fd);
     free(BFA);
 	free(bpb);
